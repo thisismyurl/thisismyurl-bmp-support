@@ -28,6 +28,16 @@ delete_metadata( 'post', 0, '_timu_bmp_converted_at', '', true );
 delete_option( 'timu_bmp_support_options' );
 delete_option( 'timu_bmp_environment_status' );
 
+// Remove transients left by activation, admin-tick lock, and per-user batch lock.
+delete_transient( 'timu_bmp_activation_status' );
+delete_transient( 'timu_bmp_admin_tick_lock' );
+// Batch backup locks are keyed per user_id; remove all users' locks.
+$user_ids = get_users( array( 'fields' => 'ID' ) );
+foreach ( $user_ids as $user_id ) {
+	delete_transient( 'timu_bmp_batch_backup_lock_' . (int) $user_id );
+}
+unset( $user_ids, $user_id );
+
 $timestamp = wp_next_scheduled( 'timu_bmp_auto_optimize_event' );
 while ( false !== $timestamp ) {
 	wp_unschedule_event( (int) $timestamp, 'timu_bmp_auto_optimize_event' );

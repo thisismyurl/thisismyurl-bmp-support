@@ -3,7 +3,7 @@
  * Plugin Name:       BMP Support by thisismyurl.com
  * Plugin URI:        https://thisismyurl.com/thisismyurl-bmp-support/
  * Description:       Enables BMP uploads and non-destructively re-encodes them to a web-safe format (PNG or WebP) with backups, bulk processing, and one-click restoration.
- * Version:           1.6165.0822
+ * Version:           1.6174.1642
  * Author:            Christopher Ross
  * Author URI:        https://thisismyurl.com/
  * Requires at least: 6.0
@@ -25,7 +25,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 if ( ! defined( 'TIMU_BMP_VERSION' ) ) {
-    define( 'TIMU_BMP_VERSION', '1.6165.0822' );
+    define( 'TIMU_BMP_VERSION', '1.6174.1642' );
 }
 
 require_once plugin_dir_path( __FILE__ ) . 'includes/class-backup-adapter.php';
@@ -62,6 +62,7 @@ class TIMU_BMP_Support {
         add_action( 'wp_ajax_timu_bmp_optimize', array( __CLASS__, 'ajax_bulk_optimize' ) );
         add_action( 'wp_ajax_timu_bmp_process_batch', array( __CLASS__, 'ajax_process_batch' ) );
         add_action( 'wp_ajax_timu_bmp_restore_single', array( __CLASS__, 'ajax_restore_single' ) );
+        add_action( 'wp_ajax_timu_bmp_reencode_originals', array( __CLASS__, 'ajax_reencode_originals' ) );
         add_filter( 'plugin_action_links_' . plugin_basename( __FILE__ ), array( __CLASS__, 'add_plugin_action_links' ) );
 
         // Allow BMP uploads even when the host or another plugin has disabled them.
@@ -82,6 +83,8 @@ class TIMU_BMP_Support {
                 'type'              => 'array',
                 'sanitize_callback' => array( __CLASS__, 'sanitize_options' ),
                 'default'           => self::get_default_options(),
+                'autoload'          => false,
+                'show_in_rest'      => false,
             )
         );
     }
@@ -948,8 +951,10 @@ class TIMU_BMP_Support {
             $imagick->writeImage( $path );
             $imagick->destroy();
         } catch ( \Exception $e ) {
-            // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-            error_log( 'timu-bmp-support: metadata error for attachment #' . $attachment_id . ': ' . $e->getMessage() );
+            if ( defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
+                // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+                error_log( 'timu-bmp-support: metadata error for attachment #' . $attachment_id . ': ' . $e->getMessage() );
+            }
         }
     }
 
@@ -1114,6 +1119,153 @@ class TIMU_BMP_Support {
     }
 
     /**
+     * AJAX callback: re-encode a batch of already-converted images from their original BMP backups.
+     *
+     * Accepts a `batch_offset` param (integer). Queries up to 20 attachments that have
+     * BACKUP_META_KEY set (i.e. originals are on disk), starting at the given offset.
+     * For each attachment: reads the original BMP from the backup path, runs it through
+     * the current conversion pipeline (PNG or WebP from settings), and replaces the
+     * converted file in the uploads directory.
+     *
+     * Returns JSON: { processed, skipped, failed, next_offset, done }.
+     *
+     * @return void
+     */
+    public static function ajax_reencode_originals() {
+        check_ajax_referer( self::AJAX_NONCE_ACTION, 'nonce' );
+
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( __( 'Unauthorized request.', 'thisismyurl-bmp-support' ) );
+        }
+
+        if ( ! self::has_supported_image_engine() ) {
+            wp_send_json_error( __( 'No supported image engine found. Enable GD or Imagick.', 'thisismyurl-bmp-support' ) );
+        }
+
+        $batch_limit = 20;
+        $offset      = isset( $_POST['batch_offset'] ) ? absint( $_POST['batch_offset'] ) : 0;
+
+        $query = new WP_Query(
+            array(
+                'post_type'      => 'attachment',
+                'post_status'    => 'inherit',
+                'posts_per_page' => $batch_limit,
+                'offset'         => $offset,
+                'no_found_rows'  => false,
+                'orderby'        => 'ID',
+                'order'          => 'ASC',
+                'meta_query'     => array(
+                    array(
+                        'key'     => self::BACKUP_META_KEY,
+                        'compare' => 'EXISTS',
+                    ),
+                    array(
+                        'key'     => self::BACKUP_META_KEY,
+                        'value'   => 'external',
+                        'compare' => '!=',
+                    ),
+                ),
+            )
+        );
+
+        $fs        = self::init_fs();
+        $processed = 0;
+        $skipped   = 0;
+        $failed    = 0;
+        $quality   = self::get_quality_setting();
+        $target    = self::get_target_setting();
+        $format_map  = self::get_target_format_map();
+        $target_mime = $format_map[ $target ]['mime'];
+        $target_ext  = $format_map[ $target ]['extension'];
+
+        if ( ! empty( $query->posts ) ) {
+            foreach ( $query->posts as $post ) {
+                $attachment_id = (int) $post->ID;
+                $backup_path   = get_post_meta( $attachment_id, self::BACKUP_META_KEY, true );
+
+                // Skip if backup path is missing or the file does not exist.
+                if ( ! $backup_path || 'external' === $backup_path || ! $fs || ! $fs->exists( $backup_path ) ) {
+                    $skipped++;
+                    continue;
+                }
+
+                // Verify the backup is actually a BMP via imagesize.
+                $info = wp_getimagesize( $backup_path );
+                if ( false === $info || empty( $info['mime'] ) || self::SOURCE_MIME !== $info['mime'] ) {
+                    $skipped++;
+                    continue;
+                }
+
+                // Load the original BMP through the WP image editor.
+                $editor = wp_get_image_editor( $backup_path );
+                if ( is_wp_error( $editor ) ) {
+                    $failed++;
+                    continue;
+                }
+
+                if ( 'webp' === $target && method_exists( $editor, 'set_quality' ) ) {
+                    $editor->set_quality( $quality );
+                }
+
+                // Determine where the converted file currently lives.
+                $current_path = get_attached_file( $attachment_id );
+                if ( ! $current_path ) {
+                    $failed++;
+                    continue;
+                }
+
+                // Build the destination path using the target extension.
+                $new_path = self::swap_extension( $current_path, $target_ext );
+                $saved    = $editor->save( $new_path, $target_mime );
+
+                if ( is_wp_error( $saved ) || ! $fs->exists( $new_path ) ) {
+                    $failed++;
+                    continue;
+                }
+
+                // If the target extension changed (e.g. was PNG, now re-encoding to WebP),
+                // remove the old converted file and update post meta.
+                if ( $new_path !== $current_path && $fs->exists( $current_path ) ) {
+                    $fs->delete( $current_path );
+                }
+
+                $rel_path     = get_post_meta( $attachment_id, '_wp_attached_file', true );
+                $new_rel_path = self::swap_extension( (string) $rel_path, $target_ext );
+
+                update_post_meta( $attachment_id, '_wp_attached_file', $new_rel_path );
+                update_post_meta( $attachment_id, self::CONVERTED_AT_KEY, time() );
+                update_post_meta( $attachment_id, self::SAVINGS_META_KEY, max( 0, (int) filesize( $backup_path ) - (int) filesize( $new_path ) ) );
+
+                wp_update_post(
+                    array(
+                        'ID'             => $attachment_id,
+                        'post_mime_type' => $target_mime,
+                    )
+                );
+
+                self::regenerate_metadata( $attachment_id, $new_path );
+                self::apply_metadata_to_output( $new_path, $attachment_id );
+
+                $processed++;
+            }
+        }
+
+        $total_managed = (int) $query->found_posts;
+        $next_offset   = $offset + $batch_limit;
+        $done          = ( $next_offset >= $total_managed ) || ( 0 === count( $query->posts ) );
+
+        wp_send_json_success(
+            array(
+                'processed'   => $processed,
+                'skipped'     => $skipped,
+                'failed'      => $failed,
+                'next_offset' => $next_offset,
+                'done'        => $done,
+            )
+        );
+    }
+
+    /**
      * Render the admin page.
      *
      * @return void
@@ -1153,17 +1305,22 @@ class TIMU_BMP_Support {
                     'ajaxUrl'    => admin_url( 'admin-ajax.php' ),
                     'nonce'      => wp_create_nonce( self::AJAX_NONCE_ACTION ),
                     'actions'    => array(
-                        'batch'   => 'timu_bmp_process_batch',
-                        'restore' => 'timu_bmp_restore_single',
+                        'batch'    => 'timu_bmp_process_batch',
+                        'restore'  => 'timu_bmp_restore_single',
+                        'reencode' => 'timu_bmp_reencode_originals',
                     ),
                     'batchSize'  => self::get_batch_size_setting(),
                     'perPage'    => (int) $options['list_per_page'],
                     'pendingIds' => $pending_ids,
                     'strings'    => array(
-                        'processing'        => __( 'Processing...', 'thisismyurl-bmp-support' ),
-                        'restoring'         => __( 'Restoring...', 'thisismyurl-bmp-support' ),
-                        'confirmRestoreAll' => __( 'Restore all images? This cannot be undone.', 'thisismyurl-bmp-support' ),
-                        'failedPrefix'      => __( 'Some images failed:', 'thisismyurl-bmp-support' ),
+                        'processing'          => __( 'Processing...', 'thisismyurl-bmp-support' ),
+                        'restoring'           => __( 'Restoring...', 'thisismyurl-bmp-support' ),
+                        'confirmRestoreAll'   => __( 'Restore all images? This cannot be undone.', 'thisismyurl-bmp-support' ),
+                        'failedPrefix'        => __( 'Some images failed:', 'thisismyurl-bmp-support' ),
+                        'reEncoding'          => __( 'Re-encoding...', 'thisismyurl-bmp-support' ),
+                        'confirmReEncode'     => __( 'Re-encode all converted images from their original BMP backups using the current format setting? Existing converted files will be replaced.', 'thisismyurl-bmp-support' ),
+                        'reEncodeComplete'    => __( 'Re-encode complete.', 'thisismyurl-bmp-support' ),
+                        'reEncodeProgress'    => __( 'Re-encoding from originals', 'thisismyurl-bmp-support' ),
                     ),
                 )
             ) . ';',
@@ -1323,9 +1480,19 @@ class TIMU_BMP_Support {
                                 <?php if ( ! empty( $restorable ) ) : ?>
                                     <hr />
                                     <p><strong><?php esc_html_e( 'Bulk Actions', 'thisismyurl-bmp-support' ); ?></strong></p>
-                                    <button id="btn-restore-all" class="button button-secondary" style="width:100%;text-align:center;" data-ids="<?php echo esc_attr( wp_json_encode( $restorable ) ); ?>">
+                                    <button id="btn-restore-all" class="button button-secondary" style="width:100%;text-align:center;margin-bottom:6px;" data-ids="<?php echo esc_attr( wp_json_encode( $restorable ) ); ?>">
                                         <?php esc_html_e( 'Restore All Originals', 'thisismyurl-bmp-support' ); ?>
                                     </button>
+                                    <button id="btn-reencode-originals" class="button button-secondary" style="width:100%;text-align:center;" data-count="<?php echo esc_attr( count( $restorable ) ); ?>">
+                                        <?php
+                                        printf(
+                                            /* translators: %s: target format label (PNG or WebP) */
+                                            esc_html__( 'Re-encode from Originals to %s', 'thisismyurl-bmp-support' ),
+                                            esc_html( $target_label )
+                                        );
+                                        ?>
+                                    </button>
+                                    <p id="timu-reencode-status" class="description" style="display:none;margin-top:6px;"></p>
                                 <?php endif; ?>
                                 <hr />
                                 <p>
@@ -1603,12 +1770,5 @@ register_deactivation_hook( __FILE__, array( 'TIMU_BMP_Support', 'deactivate_plu
 
 TIMU_BMP_Support::init();
 
-require_once plugin_dir_path( __FILE__ ) . 'github-updater.php';
-
-\ThisIsMyURL\BmpSupport\GitHubReleaseUpdater::boot(
-    array(
-        'plugin_file' => __FILE__,
-        'slug'        => 'thisismyurl-bmp-support',
-        'repo'        => 'thisismyurl/thisismyurl-bmp-support',
-    )
-);
+// github-updater.php is excluded from directory submissions.
+// Updates are delivered through the WordPress.org plugin repository.

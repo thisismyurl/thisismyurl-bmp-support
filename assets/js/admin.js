@@ -320,4 +320,72 @@ jQuery( function ( $ ) {
         stopBusyIndicator();
         window.location.reload();
     } );
+
+    /* ── Re-encode from originals ───────────────────────────── */
+
+    $( '#btn-reencode-originals' ).on( 'click', function () {
+        var $btn    = $( this );
+        var $status = $( '#timu-reencode-status' );
+        var total   = parseInt( $btn.data( 'count' ), 10 ) || 0;
+
+        if ( ! window.confirm( strings.confirmReEncode || 'Re-encode all converted images from their original BMP backups?' ) ) {
+            return;
+        }
+
+        $btn.prop( 'disabled', true ).text( strings.reEncoding || 'Re-encoding…' );
+        $status.show().text( strings.reEncodeProgress + '… 0 / ' + total );
+
+        var totalProcessed = 0;
+        var totalSkipped   = 0;
+        var totalFailed    = 0;
+
+        var sendBatch = function ( offset ) {
+            postJson( {
+                action:       actions.reencode,
+                nonce:        nonce,
+                batch_offset: offset
+            } )
+            .done( function ( res ) {
+                if ( typeof res === 'string' ) {
+                    try { res = JSON.parse( res ); } catch ( e ) { res = null; }
+                }
+
+                if ( ! res || ! res.success || ! res.data ) {
+                    $status.text( 'Re-encode request returned an unexpected response. Halting.' );
+                    $btn.prop( 'disabled', false );
+                    return;
+                }
+
+                totalProcessed += ( res.data.processed || 0 );
+                totalSkipped   += ( res.data.skipped   || 0 );
+                totalFailed    += ( res.data.failed    || 0 );
+
+                var done = res.data.done;
+                var done_count = totalProcessed + totalSkipped + totalFailed;
+                $status.text(
+                    ( strings.reEncodeProgress || 'Re-encoding' ) + '… ' +
+                    done_count + ' / ' + total +
+                    ( totalFailed ? ' (' + totalFailed + ' failed)' : '' )
+                );
+
+                if ( done ) {
+                    $status.text(
+                        ( strings.reEncodeComplete || 'Re-encode complete.' ) +
+                        ' ' + totalProcessed + ' processed, ' +
+                        totalSkipped + ' skipped, ' + totalFailed + ' failed.'
+                    );
+                    $btn.prop( 'disabled', false );
+                    return;
+                }
+
+                sendBatch( res.data.next_offset );
+            } )
+            .fail( function () {
+                $status.text( 'Re-encode request failed. Check your connection and try again.' );
+                $btn.prop( 'disabled', false );
+            } );
+        };
+
+        sendBatch( 0 );
+    } );
 } );

@@ -5,7 +5,7 @@ Tags: bmp, images, media, optimization, conversion
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.6165.0822
+Stable tag: 1.6174.1642
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -24,6 +24,7 @@ What this plugin ships:
 * Non-destructive batch optimization with a progress bar and cancel.
 * Optimize-on-upload, plus optional background auto-optimize via wp-admin traffic and/or WP-Cron.
 * Single Restore button per managed image and a Restore All bulk action that returns the original BMP.
+* Re-encode from Originals bulk action: re-processes all previously converted images through the current format setting (PNG or WebP) — useful after changing the optimize target.
 * Optional EXIF / GPS / metadata stripping and optional site-credit XMP embedding on the output file (requires Imagick).
 * A business ROI report across 30-day, 90-day, 12-month, and all-time windows.
 * Search and pagination on the Pending and Managed Media tables.
@@ -39,7 +40,7 @@ How it works:
 
 Notes:
 
-* Uses the WordPress image editor stack (GD or Imagick). No external services or phone-home.
+* Uses the WordPress image editor stack (GD or Imagick). All image processing is local — no external services, no background network calls.
 * Only `image/bmp` attachments are treated as conversion sources. PNG and WebP attachments created elsewhere are flagged as externally managed and never overwritten.
 * Backup paths are stored as written so dev/prod database copies can locate originals.
 
@@ -67,7 +68,19 @@ No. Conversion works with either GD or Imagick. Metadata stripping and site-cred
 = My host blocks BMP uploads. Will this fix that? =
 Yes. The plugin re-allows the BMP extension and adds a real-mime guard so genuine BMP files pass WordPress's file-type checks.
 
+= What does Re-encode from Originals do, and when would I use it? =
+"Re-encode from Originals" re-processes every previously converted image through the current format setting (PNG or WebP). Use it after changing the optimize target on the Settings tab — it replaces existing converted files with a fresh encode from the original BMP backup. No originals are overwritten; the backup copy is only read, never modified.
+
+== Privacy Policy ==
+
+BMP Support by thisismyurl.com does not collect, transmit, or store any personal data. All image processing runs locally on your server using PHP's GD or Imagick library. No data is sent to external servers. Optional UTM parameters appended to outbound links (when enabled on the Settings tab) are standard analytics query strings on user-initiated clicks to thisismyurl.com; no background requests are made.
+
 == Changelog ==
+
+= 1.6174.1642 =
+* Added "Re-encode from Originals" feature: a new button on the Optimize tab sidebar lets you re-process all previously converted images through the current format setting (PNG or WebP). Useful after changing the optimize target — existing converted files are replaced by a fresh encode from the original BMP backup.
+* Added AJAX handler `timu_bmp_reencode_originals`: processes up to 20 attachments per request, returns processed / skipped / failed counts and a `done` flag; JS drives repeated calls until all managed images are re-encoded.
+* Capability check uses `manage_options` to match the admin-only scope of the bulk re-encode operation.
 
 = 1.6165.0822 =
 * Initial release. Mirrors the approved WEBP Support admin shell (Optimize / Settings / Report tabs, batch + single AJAX flow, restore, ROI report) with BMP-specific execution: BMP upload enablement, a PNG/WebP optimize-target setting, and a shared Vault/Shadow backup adapter.
