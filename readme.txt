@@ -8,7 +8,7 @@ Tags: bmp, images, media, optimization, conversion
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.6174.1642
+Stable tag: 1.6190.1620
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -79,6 +79,10 @@ Yes. The plugin re-allows the BMP extension and adds a real-mime guard so genuin
 BMP Support by thisismyurl.com does not collect, transmit, or store any personal data. All image processing runs locally on your server using PHP's GD or Imagick library. No data is sent to external servers. Optional UTM parameters appended to outbound links (when enabled on the Settings tab) are standard analytics query strings on user-initiated clicks to thisismyurl.com; no background requests are made.
 
 == Changelog ==
+
+= 1.6190.1620 =
+* **New:** Vortops cloud service settings — enter a shared API key once in any thisismyurl plugin and it applies to all of them. BMP conversion works locally; Vortops enables cloud conversion in companion plugins (HEIC Support, WebP Support).
+* **New:** Test connection button for Vortops API key.
 
 = 1.6174.1642 =
 * Added "Re-encode from Originals" feature: a new button on the Optimize tab sidebar lets you re-process all previously converted images through the current format setting (PNG or WebP). Useful after changing the optimize target — existing converted files are replaced by a fresh encode from the original BMP backup.

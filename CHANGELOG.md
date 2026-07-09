@@ -2,6 +2,13 @@
 
 All notable changes to **BMP Support by Christopher Ross** are recorded here. The plugin uses a `X.Yddd.hhmm` Julian-day version scheme: `X` is the release class (`0` = pre-release, `1` = full), `Y` is the last digit of the year, and `ddd` is the day of year (001–366).
 
+## 1.6190.1620 — 2026-07-09
+
+### Added
+- **Vortops cloud services settings** — new postbox in the Settings tab for managing the shared Vortops API key. BMP conversion runs locally on the server and does not require Vortops; the shared key enables cloud conversion in companion TIMU plugins. Enter it once and all thisismyurl plugins use it.
+- `TIMU_Vortops_Client` shared client class (`includes/class-timu-vortops-client.php`).
+- Test-connection button that validates the API key before saving.
+
 ## [1.6174.1642] — 2026-06-23
 
 ### Added
