@@ -1,9 +1,12 @@
-=== BMP Support by thisismyurl.com ===
+=== BMP Support by Christopher Ross ===
 Contributors: thisismyurl
-Donate link: https://thisismyurl.com/donate/
+Plugin URI: https://thisismyurl.com/thisismyurl-bmp-support/
+Author: Christopher Ross
+Author URI: https://thisismyurl.com/
+Donate link: https://github.com/sponsors/thisismyurl
 Tags: bmp, images, media, optimization, conversion
 Requires at least: 6.0
-Tested up to: 6.8
+Tested up to: 7.0
 Requires PHP: 7.4
 Stable tag: 1.6174.1642
 License: GPLv2 or later
