@@ -178,11 +178,11 @@ class TIMU_BMP_Support {
      */
     public static function add_plugin_action_links( $links ) {
         $settings_url = admin_url( 'tools.php?page=bmp-optimizer&tab=settings' );
-        $donate_url   = self::get_thisismyurl_link( 'https://thisismyurl.com/donate/', 'plugin_row_donate' );
+        $donate_url   = self::get_thisismyurl_link( 'https://github.com/sponsors/thisismyurl', 'plugin_row_donate' );
 
         $custom_links = array(
             '<a href="' . esc_url( $settings_url ) . '">' . esc_html__( 'Settings', 'thisismyurl-bmp-support' ) . '</a>',
-            '<a href="' . esc_url( $donate_url ) . '" target="_blank" rel="noopener noreferrer">' . esc_html__( 'Donate', 'thisismyurl-bmp-support' ) . '</a>',
+            '<a href="' . esc_url( $donate_url ) . '" target="_blank" rel="noopener noreferrer">' . esc_html__( 'Sponsor', 'thisismyurl-bmp-support' ) . '</a>',
         );
 
         return array_merge( $custom_links, $links );
@@ -1332,7 +1332,7 @@ class TIMU_BMP_Support {
         $settings_url    = $base_url . '&tab=settings';
         $report_url      = $base_url . '&tab=report';
         $thisismyurl_url = self::get_thisismyurl_link( 'https://thisismyurl.com/', 'plugin_header' );
-        $donate_url      = self::get_thisismyurl_link( 'https://thisismyurl.com/donate/', 'plugin_sidebar_donate' );
+        $donate_url      = self::get_thisismyurl_link( 'https://github.com/sponsors/thisismyurl', 'plugin_sidebar_donate' );
         $target_label    = 'webp' === self::get_target_setting() ? __( 'WebP', 'thisismyurl-bmp-support' ) : __( 'PNG', 'thisismyurl-bmp-support' );
 
         ?>
@@ -1703,10 +1703,10 @@ class TIMU_BMP_Support {
                             <div class="inside">
                                 <p class="description"><?php esc_html_e( 'Use these metrics to show the measurable value this plugin has provided over business-friendly time windows.', 'thisismyurl-bmp-support' ); ?></p>
                                 <p>
-                                    <a class="button <?php echo '30d' === $report_range ? 'button-primary' : 'button-secondary'; ?>" href="<?php echo esc_url( add_query_arg( array( 'tab' => 'report', 'range' => '30d' ), $base_url ) ); ?>"><?php esc_html_e( 'Last 30 Days', 'thisismyurl-bmp-support' ); ?></a>
-                                    <a class="button <?php echo '90d' === $report_range ? 'button-primary' : 'button-secondary'; ?>" href="<?php echo esc_url( add_query_arg( array( 'tab' => 'report', 'range' => '90d' ), $base_url ) ); ?>"><?php esc_html_e( 'Last 90 Days', 'thisismyurl-bmp-support' ); ?></a>
-                                    <a class="button <?php echo '365d' === $report_range ? 'button-primary' : 'button-secondary'; ?>" href="<?php echo esc_url( add_query_arg( array( 'tab' => 'report', 'range' => '365d' ), $base_url ) ); ?>"><?php esc_html_e( 'Last 12 Months', 'thisismyurl-bmp-support' ); ?></a>
-                                    <a class="button <?php echo 'all' === $report_range ? 'button-primary' : 'button-secondary'; ?>" href="<?php echo esc_url( add_query_arg( array( 'tab' => 'report', 'range' => 'all' ), $base_url ) ); ?>"><?php esc_html_e( 'All Time', 'thisismyurl-bmp-support' ); ?></a>
+                                    <a class="button <?php echo '30d' === $report_range ? 'button-primary' : 'button-secondary'; ?>" href="<?php echo esc_url( add_query_arg( array( 'tab' => 'report', 'range' => '30d' ), $base_url ) ); ?>"><?php esc_html_e( 'Last 30 days', 'thisismyurl-bmp-support' ); ?></a>
+                                    <a class="button <?php echo '90d' === $report_range ? 'button-primary' : 'button-secondary'; ?>" href="<?php echo esc_url( add_query_arg( array( 'tab' => 'report', 'range' => '90d' ), $base_url ) ); ?>"><?php esc_html_e( 'Last 90 days', 'thisismyurl-bmp-support' ); ?></a>
+                                    <a class="button <?php echo '365d' === $report_range ? 'button-primary' : 'button-secondary'; ?>" href="<?php echo esc_url( add_query_arg( array( 'tab' => 'report', 'range' => '365d' ), $base_url ) ); ?>"><?php esc_html_e( 'Last 12 months', 'thisismyurl-bmp-support' ); ?></a>
+                                    <a class="button <?php echo 'all' === $report_range ? 'button-primary' : 'button-secondary'; ?>" href="<?php echo esc_url( add_query_arg( array( 'tab' => 'report', 'range' => 'all' ), $base_url ) ); ?>"><?php esc_html_e( 'All time', 'thisismyurl-bmp-support' ); ?></a>
                                 </p>
 
                                 <table class="widefat striped" style="max-width:960px;">
