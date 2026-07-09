@@ -1,6 +1,6 @@
 <?php
 /**
- * Plugin Name:       BMP Support by thisismyurl.com
+ * Plugin Name:       BMP Support by Christopher Ross
  * Plugin URI:        https://thisismyurl.com/thisismyurl-bmp-support/
  * Description:       Enables BMP uploads and non-destructively re-encodes them to a web-safe format (PNG or WebP) with backups, bulk processing, and one-click restoration.
  * Version:           1.6174.1642
