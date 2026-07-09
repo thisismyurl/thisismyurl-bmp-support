@@ -2,6 +2,12 @@
 
 All notable changes to **BMP Support by Christopher Ross** are recorded here. The plugin uses a `X.Yddd.hhmm` Julian-day version scheme: `X` is the release class (`0` = pre-release, `1` = full), `Y` is the last digit of the year, and `ddd` is the day of year (001–366).
 
+## 1.6190.1660 — 2026-07-09
+
+### Changed
+- Suite core refactor — Vortops client and settings UI moved to shared `class-timu-suite-core.php`. Single canonical file synced across all thisismyurl plugins.
+- Vortops postbox now rendered by `TIMU_Suite_Settings::render_vortops_postbox()`.
+
 ## 1.6190.1620 — 2026-07-09
 
 ### Added

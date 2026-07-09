@@ -3,7 +3,7 @@
  * Plugin Name:       BMP Support by Christopher Ross
  * Plugin URI:        https://thisismyurl.com/thisismyurl-bmp-support/
  * Description:       Enables BMP uploads and non-destructively re-encodes them to a web-safe format (PNG or WebP) with backups, bulk processing, and one-click restoration.
- * Version:           1.6190.1620
+ * Version:           1.6190.1660
  * Author:            Christopher Ross
  * Author URI:        https://thisismyurl.com/
  * Requires at least: 6.0
@@ -25,11 +25,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 if ( ! defined( 'TIMU_BMP_VERSION' ) ) {
-    define( 'TIMU_BMP_VERSION', '1.6190.1620' );
+    define( 'TIMU_BMP_VERSION', '1.6190.1660' );
 }
 
 require_once plugin_dir_path( __FILE__ ) . 'includes/class-backup-adapter.php';
-require_once plugin_dir_path( __FILE__ ) . 'includes/class-timu-vortops-client.php';
+require_once plugin_dir_path( __FILE__ ) . 'includes/class-timu-suite-core.php';
 
 class TIMU_BMP_Support {
 
@@ -65,7 +65,7 @@ class TIMU_BMP_Support {
         add_action( 'wp_ajax_timu_bmp_restore_single', array( __CLASS__, 'ajax_restore_single' ) );
         add_action( 'wp_ajax_timu_bmp_reencode_originals', array( __CLASS__, 'ajax_reencode_originals' ) );
         add_action( 'admin_post_timu_bmp_vortops_save', array( __CLASS__, 'handle_vortops_save' ) );
-        add_action( 'wp_ajax_timu_bmp_vortops_test',    array( __CLASS__, 'ajax_vortops_test_connection' ) );
+        TIMU_Suite_Settings::register_ajax_handlers();
         add_filter( 'plugin_action_links_' . plugin_basename( __FILE__ ), array( __CLASS__, 'add_plugin_action_links' ) );
 
         // Allow BMP uploads even when the host or another plugin has disabled them.
@@ -1294,31 +1294,6 @@ class TIMU_BMP_Support {
     }
 
     /**
-     * AJAX handler: test a Vortops API key before saving.
-     *
-     * @return void
-     */
-    public static function ajax_vortops_test_connection() {
-        check_ajax_referer( self::AJAX_NONCE_ACTION, 'nonce' );
-        if ( ! current_user_can( 'manage_options' ) ) {
-            wp_send_json_error( __( 'Unauthorized.', 'thisismyurl-bmp-support' ) );
-        }
-        $api_key = isset( $_POST['api_key'] )
-            ? sanitize_text_field( wp_unslash( $_POST['api_key'] ) )
-            : '';
-        if ( '' === $api_key ) {
-            wp_send_json_error( __( 'Please enter an API key first.', 'thisismyurl-bmp-support' ) );
-        }
-        $result = TIMU_Vortops_Client::ping_with_key( $api_key );
-        if ( is_wp_error( $result ) ) {
-            wp_send_json_error( $result->get_error_message() );
-        }
-        wp_send_json_success( array(
-            'message' => __( 'Connected successfully. Save the settings to activate Vortops on this site.', 'thisismyurl-bmp-support' ),
-        ) );
-    }
-
-    /**
      * Render the admin page.
      *
      * @return void
@@ -1358,10 +1333,9 @@ class TIMU_BMP_Support {
                     'ajaxUrl'    => admin_url( 'admin-ajax.php' ),
                     'nonce'      => wp_create_nonce( self::AJAX_NONCE_ACTION ),
                     'actions'    => array(
-                        'batch'       => 'timu_bmp_process_batch',
-                        'restore'     => 'timu_bmp_restore_single',
-                        'reencode'    => 'timu_bmp_reencode_originals',
-                        'vortopsTest' => 'timu_bmp_vortops_test',
+                        'batch'    => 'timu_bmp_process_batch',
+                        'restore'  => 'timu_bmp_restore_single',
+                        'reencode' => 'timu_bmp_reencode_originals',
                     ),
                     'batchSize'  => self::get_batch_size_setting(),
                     'perPage'    => (int) $options['list_per_page'],
@@ -1733,51 +1707,19 @@ class TIMU_BMP_Support {
                                     <?php submit_button( __( 'Save Settings', 'thisismyurl-bmp-support' ) ); ?>
                                 </form>
 
-                                <?php if ( isset( $_GET['vortops-saved'] ) ) : // phpcs:ignore WordPress.Security.NonceVerification.Recommended ?>
-                                <div class="notice notice-success is-dismissible" style="margin:12px 0;"><p><?php esc_html_e( 'Vortops settings saved.', 'thisismyurl-bmp-support' ); ?></p></div>
-                                <?php endif; ?>
-                                <div class="postbox" style="margin-top:12px;">
-                                    <h2 class="hndle"><span><?php esc_html_e( 'Cloud Services (Vortops)', 'thisismyurl-bmp-support' ); ?></span></h2>
-                                    <div class="inside">
-                                        <p><?php esc_html_e( 'BMP conversion works locally on your server using PHP\'s built-in image libraries — no cloud service required. If you also use HEIC Support or WebP Support, enter your Vortops API key here once and it will apply to all thisismyurl plugins automatically.', 'thisismyurl-bmp-support' ); ?></p>
-                                        <?php if ( TIMU_Vortops_Client::is_connected() ) : ?>
-                                        <div class="notice notice-success inline" style="padding:8px 12px;margin-bottom:12px;">
-                                            <p><?php esc_html_e( 'Vortops is connected. Cloud conversion is active for any thisismyurl plugins that use it.', 'thisismyurl-bmp-support' ); ?></p>
-                                        </div>
-                                        <?php endif; ?>
-                                        <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
-                                            <input type="hidden" name="action" value="timu_bmp_vortops_save" />
-                                            <?php wp_nonce_field( 'timu_bmp_vortops_save', 'timu_bmp_vortops_nonce' ); ?>
-                                            <table class="form-table" role="presentation">
-                                                <tr>
-                                                    <th scope="row"><label for="timu_vortops_api_key_bmp"><?php esc_html_e( 'API key', 'thisismyurl-bmp-support' ); ?></label></th>
-                                                    <td>
-                                                        <input type="password"
-                                                               id="timu_vortops_api_key_bmp"
-                                                               name="timu_vortops_api_key"
-                                                               value="<?php echo esc_attr( TIMU_Vortops_Client::get_api_key() ); ?>"
-                                                               class="regular-text"
-                                                               placeholder="<?php esc_attr_e( 'Paste your Vortops API key', 'thisismyurl-bmp-support' ); ?>" />
-                                                        <button type="button" id="btn-vortops-test-bmp" class="button" style="margin-left:6px;">
-                                                            <?php esc_html_e( 'Test connection', 'thisismyurl-bmp-support' ); ?>
-                                                        </button>
-                                                        <div id="vortops-test-result-bmp" style="margin-top:6px;min-height:20px;"></div>
-                                                        <p class="description">
-                                                            <?php
-                                                            printf(
-                                                                /* translators: %s: link to vortops.com */
-                                                                esc_html__( 'Get a free API key at %s. The key is shared across all thisismyurl plugins — connecting once covers all of them.', 'thisismyurl-bmp-support' ),
-                                                                '<a href="https://vortops.com" target="_blank" rel="noopener noreferrer">vortops.com</a>'
-                                                            );
-                                                            ?>
-                                                        </p>
-                                                    </td>
-                                                </tr>
-                                            </table>
-                                            <?php submit_button( __( 'Save Vortops settings', 'thisismyurl-bmp-support' ), 'secondary' ); ?>
-                                        </form>
-                                    </div>
-                                </div>
+                                <?php
+                                TIMU_Suite_Settings::render_vortops_postbox( array(
+                                    'save_action'     => 'timu_bmp_vortops_save',
+                                    'nonce_action'    => 'timu_bmp_vortops_save',
+                                    'nonce_name'      => 'timu_bmp_vortops_nonce',
+                                    'redirect_page'   => 'bmp-optimizer',
+                                    'field_id'        => 'timu_vortops_api_key_bmp',
+                                    'btn_id'          => 'btn-vortops-test-bmp',
+                                    'result_id'       => 'vortops-test-result-bmp',
+                                    'local_available' => true,
+                                    'local_ok_msg'    => __( 'BMP conversion works locally on your server using PHP\'s built-in image libraries — no cloud service required. If you also use HEIC Support or WebP Support, your Vortops key is shared automatically.', 'thisismyurl-bmp-support' ),
+                                ) );
+                                ?>
 
                             </div>
                         </div>
